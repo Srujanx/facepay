@@ -53,8 +53,12 @@ def setup_intent(body: SetupIntentBody):
             usage="off_session",
             payment_method_types=["card"],
         )
-        return SetupIntentResponse(client_secret=si.client_secret)
-    except stripe.StripeError as e:
+        client_secret = si.client_secret
+        if not client_secret:
+            raise HTTPException(status_code=502, detail="Stripe returned no client_secret")
+        return SetupIntentResponse(client_secret=client_secret)
+    except Exception as e:
+        print(f"PAY EXCEPTION: {type(e).__name__}: {e}")
         raise HTTPException(status_code=502, detail=f"Stripe error: {e}")
 
 
@@ -79,6 +83,8 @@ class PayResponse(BaseModel):
 
 
 def _get_stripe_customer_id(user_id: str) -> Optional[str]:
+    """Look up Stripe customer ID from profiles. Returns None if missing or placeholder/invalid."""
+    print(f"LOOKUP: user_id={user_id}")
     try:
         r = (
             supabase.table("profiles")
@@ -87,10 +93,24 @@ def _get_stripe_customer_id(user_id: str) -> Optional[str]:
             .limit(1)
             .execute()
         )
-        if r.data and len(r.data) > 0 and r.data[0].get("stripe_customer_id"):
-            return r.data[0]["stripe_customer_id"]
-    except Exception:
-        pass
+        if not r.data or len(r.data) == 0:
+            print("LOOKUP FAILED: no profile row")
+            return None
+        first_row = r.data[0]
+        raw = first_row.get("stripe_customer_id") if isinstance(first_row, dict) else getattr(first_row, "stripe_customer_id", None)
+        print(f"LOOKUP RESULT: raw={raw}")
+        if not raw or not isinstance(raw, str):
+            print("LOOKUP FAILED: missing or not string")
+            return None
+        raw = raw.strip()
+        # Reject placeholders or non-Stripe IDs (Stripe customer IDs start with cus_)
+        if not raw.startswith("cus_") or "PASTE" in raw.upper() or "HERE" in raw.upper():
+            print("LOOKUP FAILED: invalid or placeholder")
+            return None
+        return raw
+    except Exception as e:
+        print(f"PAY EXCEPTION: {type(e).__name__}: {e}")
+        print(f"LOOKUP FAILED: exception")
     return None
 
 
@@ -117,18 +137,26 @@ def _charge_and_log(
             status = "payment_failed"
         else:
             try:
-                pi = stripe.PaymentIntent.create(
-                    amount=amount_cents,
-                    currency="cad",
-                    customer=customer_id,
-                    confirm=True,
-                    off_session=True,
-                    automatic_payment_methods={"enabled": True},
-                )
-                stripe_pi_id = pi.id if pi.status == "succeeded" else None
-                if pi.status != "succeeded":
+                print(f"PAY: customer={customer_id}, amount={amount_cents}")
+                pm_list = stripe.PaymentMethod.list(customer=customer_id, type="card")
+                methods = getattr(pm_list, "data", None) or []
+                if not methods:
                     status = "payment_failed"
-            except stripe.StripeError:
+                else:
+                    payment_method_id = methods[0].id if hasattr(methods[0], "id") else methods[0].get("id")
+                    pi = stripe.PaymentIntent.create(
+                        amount=amount_cents,
+                        currency="cad",
+                        customer=customer_id,
+                        payment_method=payment_method_id,
+                        confirm=True,
+                        off_session=True,
+                    )
+                    stripe_pi_id = pi.id if pi.status == "succeeded" else None
+                    if pi.status != "succeeded":
+                        status = "payment_failed"
+            except Exception as e:
+                print(f"PAY EXCEPTION: {type(e).__name__}: {e}")
                 stripe_pi_id = None
                 status = "payment_failed"
 
@@ -144,10 +172,12 @@ def _charge_and_log(
         "trip_id": trip_id or None,
         "stop_id": stop_id or None,
     }
+    print(f"PAY RESULT: status={status}, stripe_pi_id={stripe_pi_id}")
     result = supabase.table("transactions").insert(row).execute()
     if not result.data or len(result.data) == 0:
         raise HTTPException(status_code=500, detail="Failed to log transaction")
-    transaction_id = str(result.data[0]["id"])
+    inserted = result.data[0]
+    transaction_id = str(inserted["id"] if isinstance(inserted, dict) else getattr(inserted, "id", ""))
     return transaction_id, status
 
 
@@ -209,12 +239,14 @@ def pin_confirm(body: PinConfirmBody):
             .execute()
         )
     except Exception as e:
+        print(f"PAY EXCEPTION: {type(e).__name__}: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch profile")
 
     if not r.data or len(r.data) == 0:
         raise HTTPException(status_code=404, detail="User not found")
 
-    stored_hash = r.data[0].get("pin_hash")
+    first_row = r.data[0]
+    stored_hash = first_row.get("pin_hash") if isinstance(first_row, dict) else getattr(first_row, "pin_hash", None)
     if not stored_hash:
         raise HTTPException(
             status_code=400,

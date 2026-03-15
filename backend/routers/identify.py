@@ -2,7 +2,7 @@
 POST /identify — identify face from frame(s), run liveness, pgvector search, resolve_fare.
 Accepts a single base64 frame (and optional liveness_frames for passive liveness) and route_id.
 Returns user_id, full_name, confidence, fare_category, amount_cents, pass_expired, trip_id.
-Confidence thresholds: >0.98 auto, 0.90–0.98 pin, <0.90 reject.
+Confidence thresholds: >0.55 auto, 0.40–0.55 pin, <0.40 reject (DeepFace cosine similarity).
 """
 import base64
 from typing import Optional
@@ -16,9 +16,9 @@ from db.supabase_client import supabase
 
 router = APIRouter()
 
-# Confidence thresholds (APP_FLOW.md)
-CONFIDENCE_AUTO = 0.98
-CONFIDENCE_PIN_MIN = 0.90
+# Confidence thresholds — DeepFace cosine similarity (lower than face_recognition)
+CONFIDENCE_AUTO = 0.55
+CONFIDENCE_PIN_MIN = 0.40
 
 
 class IdentifyBody(BaseModel):
@@ -104,6 +104,7 @@ def identify(body: IdentifyBody) -> IdentifyResponse | IdentifyRejectResponse:
     row = data[0]
     user_id = str(row["user_id"])
     confidence = float(row["confidence"])
+    print(f"IDENTIFY: confidence={confidence:.4f}, user_id={user_id}")
 
     # 4. Below 0.90 → reject (no identity returned)
     if confidence < CONFIDENCE_PIN_MIN:
