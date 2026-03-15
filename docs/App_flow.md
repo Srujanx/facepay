@@ -35,8 +35,8 @@ Fields: Full Name, Email, Password (min 8 chars).
 
 **Flow:**
 1. Client-side validation — name not empty, email valid, password ≥ 8 chars
-2. `supabase.auth.signUp({ email, password })` — stores full_name in user_metadata
-3. `POST /auth/register` — creates profiles row, creates Stripe customer, returns stripe_customer_id
+2. `supabase.auth.signUp({ email, password })` — stores full_name in user_metadata. **Email confirmation is disabled** in Supabase, so a session is returned immediately (no "check your email" step).
+3. `POST /auth/register` — with `Authorization: Bearer <session.access_token>`; creates profiles row, creates Stripe customer, returns stripe_customer_id
 4. Navigate to Screen 3
 
 **Errors:**
