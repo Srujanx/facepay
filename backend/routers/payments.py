@@ -140,6 +140,7 @@ def _charge_and_log(
                 print(f"PAY: customer={customer_id}, amount={amount_cents}")
                 pm_list = stripe.PaymentMethod.list(customer=customer_id, type="card")
                 methods = getattr(pm_list, "data", None) or []
+                print(f"PAYMENT METHODS: {[getattr(pm, 'id', None) or (pm.get('id') if isinstance(pm, dict) else None) for pm in methods]}")
                 if not methods:
                     status = "payment_failed"
                 else:

@@ -124,7 +124,7 @@ def register(body: RegisterBody):
             print(f"REGISTER ERROR (create auth user): {e}")
             err = str(e).lower()
             if "already" in err or "duplicate" in err or "exists" in err:
-                # Email already exists: look up existing user by email and use their id
+                # Email already exists: find existing user by email and continue with that user_id
                 try:
                     list_res = supabase.auth.admin.list_users(per_page=1000)
                     users = getattr(list_res, "users", []) if list_res else []
@@ -144,10 +144,23 @@ def register(body: RegisterBody):
                                 row0 = prof.data[0]
                                 scid = row0.get("stripe_customer_id") if isinstance(row0, dict) else None
                                 return RegisterResponse(user_id=real_user_id, stripe_customer_id=str(scid) if scid else "")
+                            # No profile yet: fall through to create Stripe customer and profile below
+                        else:
+                            real_user_id = None
+                    else:
+                        real_user_id = None
                 except Exception as lookup_err:
                     print(f"REGISTER ERROR (lookup existing user): {lookup_err}")
-                    raise HTTPException(status_code=500, detail="Failed to create user")
-            if real_user_id is None:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="An account with this email already exists. Please sign in.",
+                    )
+                if real_user_id is None:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="An account with this email already exists. Please sign in.",
+                    )
+            elif real_user_id is None:
                 raise HTTPException(status_code=500, detail="Failed to create user")
 
         if not real_user_id:
@@ -181,6 +194,15 @@ def register(body: RegisterBody):
             supabase.table("profiles").insert(row).execute()
         except Exception as e:
             print(f"REGISTER ERROR (create profile): {e}")
+            # Profile may already exist (e.g. concurrent request or re-register same email)
+            try:
+                prof = supabase.table("profiles").select("stripe_customer_id").eq("id", real_user_id).execute()
+                if prof.data and len(prof.data) > 0:
+                    row0 = prof.data[0]
+                    scid = row0.get("stripe_customer_id") if isinstance(row0, dict) else None
+                    return RegisterResponse(user_id=real_user_id, stripe_customer_id=str(scid) if scid else "")
+            except Exception:
+                pass
             raise HTTPException(status_code=500, detail="Failed to create profile")
 
         return RegisterResponse(
