@@ -19,6 +19,46 @@ PIN_HASH_SECRET = os.getenv("PIN_HASH_SECRET", "facepay-pin-secret-change-in-pro
 
 
 # ---------------------------------------------------------------------------
+# POST /pay/setup-intent
+# ---------------------------------------------------------------------------
+
+class SetupIntentBody(BaseModel):
+    user_id: str = Field(..., min_length=1)
+
+
+class SetupIntentResponse(BaseModel):
+    client_secret: str
+
+
+@router.post("/setup-intent", response_model=SetupIntentResponse)
+def setup_intent(body: SetupIntentBody):
+    """
+    Create a Stripe SetupIntent for the given user. Returns client_secret for
+    Stripe Elements / confirmCardSetup. Card is attached to the user's Stripe customer.
+    """
+    if not stripe.api_key:
+        raise HTTPException(
+            status_code=500,
+            detail="STRIPE_SECRET_KEY not configured",
+        )
+    customer_id = _get_stripe_customer_id(body.user_id)
+    if not customer_id:
+        raise HTTPException(
+            status_code=404,
+            detail="User or Stripe customer not found. Complete registration first.",
+        )
+    try:
+        si = stripe.SetupIntent.create(
+            customer=customer_id,
+            usage="off_session",
+            payment_method_types=["card"],
+        )
+        return SetupIntentResponse(client_secret=si.client_secret)
+    except stripe.StripeError as e:
+        raise HTTPException(status_code=502, detail=f"Stripe error: {e}")
+
+
+# ---------------------------------------------------------------------------
 # POST /pay
 # ---------------------------------------------------------------------------
 

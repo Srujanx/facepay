@@ -103,6 +103,7 @@ def register(body: RegisterBody):
             )
 
         # No row exists: create Supabase auth user first, then Stripe customer and profile
+        real_user_id = None
         try:
             auth_response = supabase.auth.admin.create_user(
                 {
@@ -112,41 +113,46 @@ def register(body: RegisterBody):
                     "user_metadata": {"full_name": body.full_name},
                 }
             )
+            auth_user = getattr(auth_response, "user", None) if auth_response else None
+            if auth_user is None and isinstance(auth_response, dict):
+                auth_user = auth_response.get("user")
+            if auth_user is not None:
+                real_user_id = getattr(auth_user, "id", None) or (auth_user.get("id") if isinstance(auth_user, dict) else None)
+            if real_user_id is not None:
+                real_user_id = str(real_user_id)
         except Exception as e:
             print(f"REGISTER ERROR (create auth user): {e}")
             err = str(e).lower()
             if "already" in err or "duplicate" in err or "exists" in err:
-                # Email already registered: find existing user and return their profile (never 409)
+                # Email already exists: look up existing user by email and use their id
                 try:
                     list_res = supabase.auth.admin.list_users(per_page=1000)
                     users = getattr(list_res, "users", []) if list_res else []
                     if not isinstance(users, list):
                         users = []
-                    existing_user = next((u for u in users if (getattr(u, "email", None) or (u.get("email") if isinstance(u, dict) else None)) == body.email), None)
+                    existing_user = next(
+                        (u for u in users if (getattr(u, "email", None) or (u.get("email") if isinstance(u, dict) else None)) == body.email),
+                        None,
+                    )
                     if existing_user:
                         existing_id = getattr(existing_user, "id", None) or (existing_user.get("id") if isinstance(existing_user, dict) else None)
                         if existing_id:
-                            existing_id = str(existing_id)
-                            prof = supabase.table("profiles").select("stripe_customer_id").eq("id", existing_id).execute()
+                            real_user_id = str(existing_id)
+                            # If profile already exists for this user, return it
+                            prof = supabase.table("profiles").select("stripe_customer_id").eq("id", real_user_id).execute()
                             if prof.data and len(prof.data) > 0:
                                 row0 = prof.data[0]
                                 scid = row0.get("stripe_customer_id") if isinstance(row0, dict) else None
-                                return RegisterResponse(user_id=existing_id, stripe_customer_id=str(scid) if scid else "")
+                                return RegisterResponse(user_id=real_user_id, stripe_customer_id=str(scid) if scid else "")
                 except Exception as lookup_err:
                     print(f"REGISTER ERROR (lookup existing user): {lookup_err}")
+                    raise HTTPException(status_code=500, detail="Failed to create user")
+            if real_user_id is None:
                 raise HTTPException(status_code=500, detail="Failed to create user")
-            raise HTTPException(status_code=500, detail="Failed to create user")
 
-        auth_user = getattr(auth_response, "user", None) if auth_response else None
-        if auth_user is None and isinstance(auth_response, dict):
-            auth_user = auth_response.get("user")
-        real_user_id = None
-        if auth_user is not None:
-            real_user_id = getattr(auth_user, "id", None) or (auth_user.get("id") if isinstance(auth_user, dict) else None)
         if not real_user_id:
-            print(f"REGISTER ERROR (create auth user): unexpected response {auth_response}")
+            print(f"REGISTER ERROR (create auth user): unexpected response")
             raise HTTPException(status_code=500, detail="Failed to create user")
-        real_user_id = str(real_user_id)
 
         try:
             customer = stripe.Customer.create(
