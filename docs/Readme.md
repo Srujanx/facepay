@@ -60,7 +60,7 @@ Doors finally close
 
 <div align="center">
 
-![FacePay Architecture](docs/architecture.jpeg)
+![Image](https://github.com/user-attachments/assets/044080b4-b7dc-446c-8a6b-e84f3d0430f4)
 
 *Single React monorepo · `/register` route · `/terminal` route · One Vercel deploy*
 
@@ -73,8 +73,6 @@ Doors finally close
 ## ◈ The Boarding Flow
 
 <div align="center">
-
-![Boarding Flow](docs/boarding-flow.svg)
 
 </div>
 
@@ -112,31 +110,30 @@ Camera detects face
 ---
 
 ## ◈ Screenshots
-
 ### Registration App — `/register`
 
 | Landing | Create Account | Fare Category |
 |:---:|:---:|:---:|
-| ![Landing](docs/screenshots/01-landing.jpeg) | ![Create Account](docs/screenshots/02-create-account.jpeg) | ![Fare Category](docs/screenshots/03-fare-category.jpeg) |
+| ![Image](https://github.com/user-attachments/assets/161b1928-12e4-4f52-bea9-fbf0a514b31b) | ![Image](https://github.com/user-attachments/assets/bbce7fab-5a59-40f9-9cbc-b5969c48d59b) | ![Image](https://github.com/user-attachments/assets/42da819f-1da3-4d74-808b-4ea79f5cedd6) |
 | *"Your face is your ticket."* | *Account creation with 4-digit PIN* | *All 7 DRT fare categories with live prices* |
 
 | Face Capture | Registration Complete |
 |:---:|:---:|
-| ![Face Capture](docs/screenshots/04-face-capture.jpeg) | ![Registration Complete](docs/screenshots/05-registration-complete.jpeg) |
+| ![Image](https://github.com/user-attachments/assets/a4021d47-ddfc-4df0-83af-e5dd35d31709) | ![Image](https://github.com/user-attachments/assets/3b177e29-f963-4e79-af52-83ee19fcf994) |
 | *Live webcam with green oval overlay + liveness challenge* | *U-Pass registered — free boarding confirmed* |
 
 ### Bus Terminal — `/terminal`
 
 | Terminal Success |
 |:---:|
-| ![Terminal Success](docs/screenshots/06-terminal-success.jpeg) |
+| ![Image](https://github.com/user-attachments/assets/253c58ce-bc72-4354-9013-bdf910591665) |
 | *Full-screen success — $3.73 charged, passenger greeted by name* |
 
 ### Backend — Zero-Knowledge Biometrics
 
 | Supabase — Embeddings | Stripe — Customers |
 |:---:|:---:|
-| ![Supabase](docs/screenshots/07-supabase-embeddings.jpeg) | ![Stripe](docs/screenshots/08-stripe-customers.jpeg) |
+| ![Image](https://github.com/user-attachments/assets/31a7ad08-fdc0-4bd7-9c4f-5a04881e48ee) | ![Image](https://github.com/user-attachments/assets/0e61d700-718f-4350-a7bc-46f748b87696) |
 | *128-dim float vectors only — no images, no thumbnails, ever* | *Real Stripe customers and payment methods created during testing* |
 
 <br/>
